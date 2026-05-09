@@ -3,7 +3,5 @@ __pycache__/
 .jupyter_runtime/
 *.pyc
 
-# Local data and generated outputs
-data/raw/Data.xlsx
-data/raw/Data (1).xlsx
+# Generated outputs
 outputs/project2/
