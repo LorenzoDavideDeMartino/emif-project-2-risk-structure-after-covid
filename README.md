@@ -6,7 +6,12 @@ This repository contains the full empirical pipeline for Project 2 of **Empirica
 
 **Has the structure of risk in financial markets changed since COVID-19?**
 
-The project studies this question by comparing the behavior of returns, volatility, dependence, transmission and regimes before and after the COVID break.
+The project studies this question by comparing the behavior of returns, volatility, dependence, transmission and regimes across two calendar sub-samples:
+
+- **Pre-COVID:** 2000-2019
+- **Post-COVID:** 2020 onward
+
+The event date of **11 March 2020** is then treated separately as the key economic breakpoint to test and visualize.
 
 ## Data
 
@@ -61,12 +66,14 @@ Run the notebooks in the following order:
 5. `05_regimes_and_breaks.ipynb`
 6. `EMiF_Project_Final.ipynb`
 
+If you want a single submission-ready notebook, run `EMiF_Project_Final.ipynb`: it reproduces the full pipeline directly from `Data.xlsx`.
+
 ## What each notebook does
 
 ### 01_data_prep_and_stylized_facts.ipynb
 - Loads the 14 market series from the Excel file
 - Builds log returns for price series and first differences in basis points for yields
-- Defines the pre-COVID and post-COVID samples
+- Defines the pre-COVID (2000-2019) and post-COVID (2020 onward) samples
 - Produces descriptive moments, downside risk measures, correlation heatmaps and autocorrelation plots
 - Justifies the COVID break date with variance break tests on the S&P 500
 
@@ -91,8 +98,8 @@ Run the notebooks in the following order:
 - Serves as the core notebook for the final research message
 
 ### EMiF_Project_Final.ipynb
-- Provides a clean master narrative that summarizes the main findings from the five notebooks
-- Can be used as the final presentation notebook for the project defense
+- Reproduces the full empirical pipeline in one self-contained notebook
+- Can be used as the submission-ready master notebook because it reruns the analysis directly from `Data.xlsx`
 
 ## Outputs
 
@@ -104,4 +111,5 @@ The notebooks save tables and figures under `outputs/project2/` so that results 
 - No machine learning, copulas, intraday data or BEKK models are used.
 - Yield series are never log-transformed; they are converted into daily changes in basis points.
 - Oil is treated with simple percentage returns because the April 2020 negative WTI settlement makes a standard log return undefined.
+- The sample split is calendar-based (`2000-2019` vs `2020+`), while `11 March 2020` is kept as the tested and plotted COVID event date.
 - The analysis is intended to run in less than 15 minutes on a standard laptop.

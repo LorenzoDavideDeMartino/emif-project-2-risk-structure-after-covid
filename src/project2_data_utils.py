@@ -22,6 +22,7 @@ from project2_config import (
     YIELD_COLUMNS,
     DISPLAY_NAMES,
     COVID_BREAK,
+    POST_COVID_START,
     ANALYSIS_START,
     TRADING_DAYS,
     VAR_LEVEL,
@@ -76,9 +77,11 @@ def build_aligned_returns(raw_data: pd.DataFrame) -> tuple[pd.DataFrame, pd.Data
 
 
 def split_pre_post(aligned_returns: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    covid_break = pd.Timestamp(COVID_BREAK)
-    pre_covid = aligned_returns.loc[aligned_returns["date"] < covid_break].copy()
-    post_covid = aligned_returns.loc[aligned_returns["date"] >= covid_break].copy()
+    # We keep the event date (11 March 2020) for break tests and figures,
+    # but the sample split itself follows the project brief: 2000-2019 vs 2020 onward.
+    sample_split = pd.Timestamp(POST_COVID_START)
+    pre_covid = aligned_returns.loc[aligned_returns["date"] < sample_split].copy()
+    post_covid = aligned_returns.loc[aligned_returns["date"] >= sample_split].copy()
     return pre_covid, post_covid
 
 
