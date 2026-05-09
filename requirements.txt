@@ -1,0 +1,9 @@
+pandas
+numpy
+statsmodels
+arch
+scipy
+matplotlib
+seaborn
+ruptures
+openpyxl

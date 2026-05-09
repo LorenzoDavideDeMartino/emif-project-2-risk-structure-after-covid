@@ -1,0 +1,9 @@
+__pycache__/
+.ipynb_checkpoints/
+.jupyter_runtime/
+*.pyc
+
+# Local data and generated outputs
+data/raw/Data.xlsx
+data/raw/Data (1).xlsx
+outputs/project2/
