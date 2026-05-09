@@ -25,28 +25,28 @@ No external data source is used anywhere in the pipeline.
 
 ```text
 .
-??? data/
-?   ??? raw/
-?   ?   ??? Data.xlsx
-?   ??? processed/
-??? notebooks/
-?   ??? 01_data_prep_and_stylized_facts.ipynb
-?   ??? 02_univariate_garch.ipynb
-?   ??? 03_multivariate_dcc_erc.ipynb
-?   ??? 04_var_geweke_transmission.ipynb
-?   ??? 05_regimes_and_breaks.ipynb
-?   ??? EMiF_Project_Final.ipynb
-??? outputs/
-?   ??? project2/
-??? src/
-?   ??? project2_config.py
-?   ??? project2_data_utils.py
-?   ??? project2_garch_utils.py
-?   ??? project2_multivariate_utils.py
-?   ??? project2_var_utils.py
-?   ??? project2_regime_utils.py
-??? requirements.txt
-??? README.md
+|-- data/
+|   |-- raw/
+|   |   `-- Data.xlsx
+|   `-- processed/
+|-- notebooks/
+|   |-- 01_data_prep_and_stylized_facts.ipynb
+|   |-- 02_univariate_garch.ipynb
+|   |-- 03_multivariate_dcc_erc.ipynb
+|   |-- 04_var_geweke_transmission.ipynb
+|   |-- 05_regimes_and_breaks.ipynb
+|   `-- EMiF_Project_Final.ipynb
+|-- outputs/
+|   `-- project2/
+|-- src/
+|   |-- project2_config.py
+|   |-- project2_data_utils.py
+|   |-- project2_garch_utils.py
+|   |-- project2_multivariate_utils.py
+|   |-- project2_var_utils.py
+|   `-- project2_regime_utils.py
+|-- requirements.txt
+`-- README.md
 ```
 
 ## Environment setup
