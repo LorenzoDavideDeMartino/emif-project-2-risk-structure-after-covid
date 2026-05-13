@@ -3,12 +3,11 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from scipy import stats
 from statsmodels.api import OLS, add_constant
 from statsmodels.stats.diagnostic import acorr_ljungbox
 from arch import arch_model
 
-from project2_config import FIGURE_DIR, TABLE_DIR
+from project2_config import TABLE_DIR
 from project2_data_utils import (
     ensure_output_dirs,
     load_raw_data,
@@ -28,6 +27,7 @@ MODEL_SPECS = {
     "GJR-GARCH": {"vol": "GARCH", "p": 1, "o": 1, "q": 1, "dist": "normal"},
     "GARCH-t": {"vol": "GARCH", "p": 1, "o": 0, "q": 1, "dist": "t"},
 }
+LJUNG_BOX_LAG = 10
 
 
 def load_garch_samples() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
@@ -91,18 +91,18 @@ def engle_ng_test(result: object) -> dict:
     }
 
 
-def diagnostics_table(result: object, model_name: str) -> dict:
+def diagnostics_table(result: object) -> dict:
     # We test residual autocorrelation and residual ARCH left in the standardized residuals.
     standardized_residuals = pd.Series(result.std_resid).dropna()
-    ljung_resid = acorr_ljungbox(standardized_residuals, lags=[10], return_df=True)
-    ljung_sq = acorr_ljungbox(standardized_residuals ** 2, lags=[10], return_df=True)
+    ljung_resid = acorr_ljungbox(standardized_residuals, lags=[LJUNG_BOX_LAG], return_df=True)
+    ljung_sq = acorr_ljungbox(standardized_residuals ** 2, lags=[LJUNG_BOX_LAG], return_df=True)
     engle_ng = engle_ng_test(result)
 
     diagnostics = {
-        "lb_resid_stat_lag10": float(ljung_resid.loc[10, "lb_stat"]),
-        "lb_resid_pvalue_lag10": float(ljung_resid.loc[10, "lb_pvalue"]),
-        "lb_sq_resid_stat_lag10": float(ljung_sq.loc[10, "lb_stat"]),
-        "lb_sq_resid_pvalue_lag10": float(ljung_sq.loc[10, "lb_pvalue"]),
+        "lb_resid_stat_lag10": float(ljung_resid.loc[LJUNG_BOX_LAG, "lb_stat"]),
+        "lb_resid_pvalue_lag10": float(ljung_resid.loc[LJUNG_BOX_LAG, "lb_pvalue"]),
+        "lb_sq_resid_stat_lag10": float(ljung_sq.loc[LJUNG_BOX_LAG, "lb_stat"]),
+        "lb_sq_resid_pvalue_lag10": float(ljung_sq.loc[LJUNG_BOX_LAG, "lb_pvalue"]),
     }
     diagnostics.update(engle_ng)
     return diagnostics
@@ -126,23 +126,20 @@ def summarize_garch_result(result: object, asset_name: str, sample_name: str, mo
         "aic": float(result.aic),
         "bic": float(result.bic),
     }
-    summary.update(diagnostics_table(result, model_name))
+    summary.update(diagnostics_table(result))
     return summary
 
 
-def estimate_all_garch_models(pre_covid: pd.DataFrame, post_covid: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+def estimate_all_garch_models(pre_covid: pd.DataFrame, post_covid: pd.DataFrame) -> pd.DataFrame:
     summary_rows = []
-    fitted_models = {}
 
     for sample_name, sample_data in [("Pre-COVID", pre_covid), ("Post-COVID", post_covid)]:
         for asset_name in GARCH_ASSETS:
             for model_name in MODEL_SPECS:
                 result = fit_one_garch(sample_data[asset_name], model_name)
-                fitted_models[(sample_name, asset_name, model_name)] = result
                 summary_rows.append(summarize_garch_result(result, asset_name, sample_name, model_name))
 
-    summary_table = pd.DataFrame(summary_rows)
-    return summary_table, fitted_models
+    return pd.DataFrame(summary_rows)
 
 
 def plot_conditional_volatility(pre_series: pd.Series, post_series: pd.Series, asset_name: str) -> plt.Figure:

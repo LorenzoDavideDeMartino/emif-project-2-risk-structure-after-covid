@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from scipy import optimize
 from arch import arch_model
 
-from project2_config import FIGURE_DIR, TABLE_DIR, COVID_BREAK, TRADING_DAYS
+from project2_config import TABLE_DIR, COVID_BREAK, POST_COVID_START
 from project2_data_utils import (
     ensure_output_dirs,
     load_raw_data,
@@ -26,13 +26,6 @@ PAIR_LABELS = {
     ("sp500", "us_hy_bonds"): "S&P 500 vs US HY Bonds",
     ("sp500", "oil"): "S&P 500 vs Oil futures",
     ("gold", "ust10y_yield"): "Gold vs US 10Y yield change",
-}
-DISPLAY = {
-    "sp500": "S&P 500",
-    "ust10y_yield": "US 10Y yield change",
-    "us_hy_bonds": "US HY Bonds",
-    "oil": "Oil futures",
-    "gold": "Gold",
 }
 
 
@@ -76,14 +69,14 @@ def plot_rolling_correlations(rolling_table: pd.DataFrame) -> plt.Figure:
 
 
 def summarize_rolling_correlations(rolling_table: pd.DataFrame) -> pd.DataFrame:
-    covid_break = pd.Timestamp(COVID_BREAK)
+    sample_split = pd.Timestamp(POST_COVID_START)
     rows = []
     for pair in KEY_PAIRS:
         pair_data = rolling_table.loc[
             (rolling_table["left"] == pair[0]) & (rolling_table["right"] == pair[1])
         ]
-        pre = pair_data.loc[pair_data["date"] < covid_break, "rolling_corr"]
-        post = pair_data.loc[pair_data["date"] >= covid_break, "rolling_corr"]
+        pre = pair_data.loc[pair_data["date"] < sample_split, "rolling_corr"]
+        post = pair_data.loc[pair_data["date"] >= sample_split, "rolling_corr"]
         rows.append({
             "pair": PAIR_LABELS[pair],
             "pre_mean_rolling_corr": pre.mean(),
@@ -169,7 +162,6 @@ def fit_bivariate_dcc(pair_data: pd.DataFrame) -> dict:
         "persistence": float(alpha + beta),
         "success": bool(optimum.success),
         "dcc_path": dcc_path,
-        "standardized_residuals": z,
     }
 
 
@@ -185,9 +177,9 @@ def plot_spx_ust_dcc(dcc_path: pd.DataFrame) -> plt.Figure:
 
 
 def summarize_dcc_path(dcc_path: pd.DataFrame) -> pd.DataFrame:
-    covid_break = pd.Timestamp(COVID_BREAK)
-    pre = dcc_path.loc[dcc_path["date"] < covid_break, "dcc_corr"]
-    post = dcc_path.loc[dcc_path["date"] >= covid_break, "dcc_corr"]
+    sample_split = pd.Timestamp(POST_COVID_START)
+    pre = dcc_path.loc[dcc_path["date"] < sample_split, "dcc_corr"]
+    post = dcc_path.loc[dcc_path["date"] >= sample_split, "dcc_corr"]
     return pd.DataFrame([{
         "pre_mean_dcc_corr": pre.mean(),
         "post_mean_dcc_corr": post.mean(),

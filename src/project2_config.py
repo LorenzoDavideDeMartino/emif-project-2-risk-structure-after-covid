@@ -55,6 +55,8 @@ YIELD_COLUMNS = [
     "bund10y_yield",
 ]
 
+ALL_SERIES_COLUMNS = PRICE_COLUMNS + YIELD_COLUMNS
+
 DISPLAY_NAMES = {
     "sp500": "S&P 500",
     "eurostoxx50": "Euro Stoxx 50",

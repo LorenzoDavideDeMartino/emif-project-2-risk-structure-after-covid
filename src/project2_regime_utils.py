@@ -6,16 +6,16 @@ import matplotlib.pyplot as plt
 import ruptures as rpt
 from statsmodels.tsa.regime_switching.markov_regression import MarkovRegression
 
-from project2_config import COVID_BREAK, FIGURE_DIR, TABLE_DIR, TRADING_DAYS
+from project2_config import COVID_BREAK, POST_COVID_START, TABLE_DIR, TRADING_DAYS
 from project2_data_utils import ensure_output_dirs, load_raw_data, build_aligned_returns
-from project2_multivariate_utils import rolling_correlation_table, KEY_PAIRS, ROLLING_WINDOW
+from project2_multivariate_utils import rolling_correlation_table, ROLLING_WINDOW
 
 SPX_UST_PAIR = ("sp500", "ust10y_yield")
 ROLLING_BREAK_WINDOW = 63
 MAX_BREAKS = 3
 
 
-def load_regime_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def load_regime_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     raw_data = load_raw_data()
     _, aligned_returns = build_aligned_returns(raw_data)
 
@@ -32,7 +32,7 @@ def load_regime_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         ["date", "rolling_corr"],
     ].rename(columns={"rolling_corr": "spx_ust_rolling_corr"}).reset_index(drop=True)
 
-    return aligned_returns, rolling_variance, spx_ust_corr
+    return rolling_variance, spx_ust_corr
 
 
 def fit_two_state_markov(correlation_data: pd.DataFrame):
@@ -137,10 +137,10 @@ def plot_breaks(series: pd.Series, break_table: pd.DataFrame, title: str, ylabel
 
 
 def pre_post_break_count(break_table: pd.DataFrame) -> pd.DataFrame:
-    covid_break = pd.Timestamp(COVID_BREAK)
+    sample_split = pd.Timestamp(POST_COVID_START)
     return pd.DataFrame([{
-        "n_breaks_pre_covid": int((pd.to_datetime(break_table["break_date"]) < covid_break).sum()),
-        "n_breaks_post_covid": int((pd.to_datetime(break_table["break_date"]) >= covid_break).sum()),
+        "n_breaks_pre_covid": int((pd.to_datetime(break_table["break_date"]) < sample_split).sum()),
+        "n_breaks_post_covid": int((pd.to_datetime(break_table["break_date"]) >= sample_split).sum()),
     }])
 
 

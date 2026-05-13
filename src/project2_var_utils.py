@@ -8,7 +8,7 @@ from scipy import stats
 from statsmodels.api import OLS, add_constant
 from statsmodels.tsa.api import VAR
 
-from project2_config import COVID_BREAK, FIGURE_DIR, TABLE_DIR
+from project2_config import TABLE_DIR
 from project2_data_utils import ensure_output_dirs, load_raw_data, build_aligned_returns, split_pre_post
 
 VAR_COLUMNS = ["sp500", "ust10y_yield", "oil", "eurusd", "us_hy_bonds"]
@@ -47,7 +47,7 @@ def var_summary_row(var_result, sample_name: str) -> dict:
         "bic": float(var_result.bic),
         "hqic": float(var_result.hqic),
         "stable": bool(var_result.is_stable()),
-        "largest_root_modulus": float(np.max(roots)),
+        "smallest_root_modulus": float(np.min(roots)),
     }
 
 
@@ -73,7 +73,8 @@ def restricted_ar_variance(series: pd.Series, lag_order: int = VAR_LAG) -> float
     for lag in range(1, lag_order + 1):
         ar_frame[f"lag_{lag}"] = series.shift(lag)
     ar_frame = ar_frame.dropna()
-    ar_model = OLS(ar_frame["y"], add_constant(ar_frame[[f"lag_{lag}" for lag in range(1, lag_order + 1)]] )).fit()
+    lag_columns = [f"lag_{lag}" for lag in range(1, lag_order + 1)]
+    ar_model = OLS(ar_frame["y"], add_constant(ar_frame[lag_columns])).fit()
     return float(np.var(ar_model.resid, ddof=lag_order + 1))
 
 
@@ -107,7 +108,8 @@ def geweke_causality_table(var_result, sample_data: pd.DataFrame, sample_name: s
 
     for left, right in itertools.combinations(VAR_COLUMNS, 2):
         sub_cov = sigma_u.loc[[left, right], [left, right]].to_numpy()
-        instantaneous_measure = float(np.log((sub_cov[0, 0] * sub_cov[1, 1]) / np.linalg.det(sub_cov)))
+        determinant = max(float(np.linalg.det(sub_cov)), 1e-12)
+        instantaneous_measure = float(np.log((sub_cov[0, 0] * sub_cov[1, 1]) / determinant))
         instantaneous_stat = n_obs * instantaneous_measure
         instantaneous_pvalue = 1.0 - stats.chi2.cdf(instantaneous_stat, df=1)
         rows.append({

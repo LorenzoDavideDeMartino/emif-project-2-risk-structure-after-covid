@@ -14,12 +14,12 @@ from statsmodels.stats.diagnostic import normal_ad
 
 from project2_config import (
     DATA_CANDIDATES,
-    OUTPUT_DIR,
     TABLE_DIR,
     FIGURE_DIR,
     COLUMN_MAP,
     PRICE_COLUMNS,
     YIELD_COLUMNS,
+    ALL_SERIES_COLUMNS,
     DISPLAY_NAMES,
     COVID_BREAK,
     POST_COVID_START,
@@ -52,6 +52,11 @@ def load_raw_data() -> pd.DataFrame:
     raw_data["date"] = pd.to_datetime(raw_data["date"])
     raw_data = raw_data.rename(columns=COLUMN_MAP)
     raw_data = raw_data.sort_values("date").reset_index(drop=True)
+    expected_columns = {"date", *ALL_SERIES_COLUMNS}
+    missing_columns = expected_columns.difference(raw_data.columns)
+    if missing_columns:
+        missing_list = ", ".join(sorted(missing_columns))
+        raise ValueError(f"The Excel file is missing the following required columns: {missing_list}")
     return raw_data
 
 
@@ -130,7 +135,7 @@ def describe_one_series(series: pd.Series, asset_name: str, sample_name: str) ->
 def build_stylized_facts_table(pre_covid: pd.DataFrame, post_covid: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for sample_name, sample in [("Pre-COVID", pre_covid), ("Post-COVID", post_covid)]:
-        for asset_name in PRICE_COLUMNS + YIELD_COLUMNS:
+        for asset_name in ALL_SERIES_COLUMNS:
             rows.append(describe_one_series(sample[asset_name].dropna(), asset_name, sample_name))
     stylized_facts = pd.DataFrame(rows)
     stylized_facts["asset_label"] = stylized_facts["asset"].map(DISPLAY_NAMES)
@@ -237,7 +242,7 @@ def plot_correlation_heatmaps(pre_covid: pd.DataFrame, post_covid: pd.DataFrame)
 
 
 def plot_acf_grid(aligned_returns: pd.DataFrame, title: str, squared: bool = False) -> plt.Figure:
-    columns = [column for column in aligned_returns.columns if column != "date"]
+    columns = [column for column in ALL_SERIES_COLUMNS if column in aligned_returns.columns]
     figure, axes = plt.subplots(4, 4, figsize=(16, 14))
     axes = axes.flatten()
 
