@@ -35,6 +35,7 @@ No external data source is used anywhere in the pipeline.
 |   |-- 03_multivariate_dcc_erc.ipynb
 |   |-- 04_var_geweke_transmission.ipynb
 |   |-- 05_regimes_and_breaks.ipynb
+|   |-- _notebook_setup.py
 |   `-- EMiF_Project_Final.ipynb
 |-- outputs/
 |   `-- project2/
