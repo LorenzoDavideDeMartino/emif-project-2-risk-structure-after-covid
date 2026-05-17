@@ -10,7 +10,8 @@ import seaborn as sns
 import ruptures as rpt
 from scipy import stats
 from statsmodels.graphics.tsaplots import plot_acf
-from statsmodels.stats.diagnostic import normal_ad
+from statsmodels.stats.diagnostic import normal_ad, breaks_cusumolsresid
+from statsmodels.tsa.stattools import adfuller, kpss
 
 from project2_config import (
     DATA_CANDIDATES,
@@ -69,7 +70,7 @@ def build_aligned_returns(raw_data: pd.DataFrame) -> tuple[pd.DataFrame, pd.Data
         # Oil futures turn negative in April 2020, so a standard log return is undefined there.
         # We therefore use simple percentage returns for oil, while keeping log returns for the other price series.
         if column == "oil":
-            transformed_data[column] = 100.0 * level_data[column].pct_change()
+            transformed_data[column] = 100.0 * level_data[column].pct_change(fill_method=None)
         else:
             transformed_data[column] = 100.0 * np.log(level_data[column]).diff()
 
@@ -142,6 +143,25 @@ def build_stylized_facts_table(pre_covid: pd.DataFrame, post_covid: pd.DataFrame
     return stylized_facts
 
 
+def stationarity_test_table(samples: dict[str, pd.DataFrame], variables: list[str]) -> pd.DataFrame:
+    rows = []
+    for sample_name, sample_data in samples.items():
+        for variable in variables:
+            series = sample_data[variable].dropna()
+            adf_stat, adf_pvalue, *_ = adfuller(series, autolag="AIC")
+            kpss_stat, kpss_pvalue, *_ = kpss(series, regression="c", nlags="auto")
+            rows.append({
+                "sample": sample_name,
+                "variable": variable,
+                "variable_label": DISPLAY_NAMES.get(variable, variable),
+                "adf_stat": float(adf_stat),
+                "adf_pvalue": float(adf_pvalue),
+                "kpss_stat": float(kpss_stat),
+                "kpss_pvalue": float(kpss_pvalue),
+            })
+    return pd.DataFrame(rows)
+
+
 def variance_chow_test(variance_proxy: pd.Series, break_date: str) -> dict:
     # We test for a break in the mean of squared returns, which is the standard daily proxy for return variance.
     variance_proxy = variance_proxy.dropna().copy()
@@ -198,6 +218,34 @@ def quandt_andrews_style_variance_test(variance_proxy: pd.Series, trim: float = 
         })
 
     return pd.DataFrame(rows).sort_values("f_stat", ascending=False).reset_index(drop=True)
+
+
+def cusum_variance_break_test(variance_proxy: pd.Series) -> dict:
+    # We complement the break-date scan with a HAC-robust CUSUM test on an AR(1) of squared returns.
+    variance_proxy = variance_proxy.dropna().copy()
+    test_frame = pd.DataFrame({
+        "y": variance_proxy,
+        "lag_1": variance_proxy.shift(1),
+    }).dropna()
+    ar_result = statsmodels_ols(test_frame["y"], test_frame[["lag_1"]])
+    statistic, pvalue, critical_values = breaks_cusumolsresid(
+        ar_result.resid.to_numpy(),
+        ddof=ar_result.df_model,
+    )
+    critical_lookup = {level: value for level, value in critical_values}
+    return {
+        "cusum_stat": float(statistic),
+        "cusum_pvalue": float(pvalue),
+        "cusum_critical_1pct": float(critical_lookup[1]),
+        "cusum_critical_5pct": float(critical_lookup[5]),
+        "cusum_critical_10pct": float(critical_lookup[10]),
+    }
+
+
+def statsmodels_ols(y: pd.Series, x: pd.DataFrame):
+    from statsmodels.api import OLS, add_constant
+
+    return OLS(y, add_constant(x)).fit(cov_type="HAC", cov_kwds={"maxlags": 5})
 
 
 def bai_perron_style_breaks(variance_proxy: pd.Series, n_breaks: int = 3, min_size: int = 63) -> pd.DataFrame:

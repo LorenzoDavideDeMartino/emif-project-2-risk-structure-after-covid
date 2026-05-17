@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from scipy import stats
 from statsmodels.api import OLS, add_constant
 from statsmodels.tsa.api import VAR
+from statsmodels.tsa.vector_ar.var_model import VARResultsWrapper
 
 from project2_config import TABLE_DIR
 from project2_data_utils import ensure_output_dirs, load_raw_data, build_aligned_returns, split_pre_post
@@ -31,10 +32,16 @@ def load_var_samples() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     return aligned_var_data, pre_covid, post_covid
 
 
-def fit_var(sample_data: pd.DataFrame, lag_order: int = VAR_LAG):
+def fit_var(sample_data: pd.DataFrame, lag_order: int = VAR_LAG) -> VARResultsWrapper:
     var_input = sample_data.set_index("date")
     fitted_var = VAR(var_input).fit(lag_order)
     return fitted_var
+
+
+def var_order_selection(sample_data: pd.DataFrame, max_lags: int = 10) -> pd.DataFrame:
+    var_input = sample_data.set_index("date")
+    selection = VAR(var_input).select_order(maxlags=max_lags)
+    return pd.DataFrame([selection.selected_orders]).rename(columns=str.upper)
 
 
 def var_summary_row(var_result, sample_name: str) -> dict:
@@ -68,42 +75,50 @@ def granger_table(var_result, sample_name: str) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def restricted_ar_variance(series: pd.Series, lag_order: int = VAR_LAG) -> float:
-    ar_frame = pd.DataFrame({"y": series})
-    for lag in range(1, lag_order + 1):
-        ar_frame[f"lag_{lag}"] = series.shift(lag)
-    ar_frame = ar_frame.dropna()
-    lag_columns = [f"lag_{lag}" for lag in range(1, lag_order + 1)]
-    ar_model = OLS(ar_frame["y"], add_constant(ar_frame[lag_columns])).fit()
-    return float(np.var(ar_model.resid, ddof=lag_order + 1))
+def geweke_directional_measure(data: pd.DataFrame, causing: str, caused: str, lag_order: int = VAR_LAG) -> dict:
+    lagged_blocks = [
+        data[VAR_COLUMNS].shift(lag).add_suffix(f"_l{lag}")
+        for lag in range(1, lag_order + 1)
+    ]
+    regression_frame = pd.concat([data[[caused]], *lagged_blocks], axis=1).dropna()
+    dependent = regression_frame[caused]
+    regressors = regression_frame.drop(columns=[caused])
+    drop_columns = [f"{causing}_l{lag}" for lag in range(1, lag_order + 1)]
+
+    full_fit = OLS(dependent, add_constant(regressors)).fit(cov_type="HAC", cov_kwds={"maxlags": 5})
+    restricted_fit = OLS(
+        dependent,
+        add_constant(regressors.drop(columns=drop_columns)),
+    ).fit(cov_type="HAC", cov_kwds={"maxlags": 5})
+
+    n_obs = len(dependent)
+    full_variance = float(full_fit.ssr / n_obs)
+    restricted_variance = float(restricted_fit.ssr / n_obs)
+    measure = float(np.log(restricted_variance / full_variance))
+    statistic = n_obs * measure
+    pvalue = 1.0 - stats.chi2.cdf(statistic, df=lag_order)
+    return {
+        "geweke_value": measure,
+        "test_stat": statistic,
+        "pvalue": pvalue,
+    }
 
 
 def geweke_causality_table(var_result, sample_data: pd.DataFrame, sample_name: str, lag_order: int = VAR_LAG) -> pd.DataFrame:
-    # Time-domain Geweke causality compares the forecast error variance of a univariate AR to the forecast error variance inside the full VAR.
+    # Directional Geweke compares a full equation with a restricted one where the lags of one causing variable are removed.
     var_input = sample_data.set_index("date")
     sigma_u = var_result.sigma_u
     n_obs = int(var_result.nobs)
     rows = []
 
-    restricted_variances = {
-        variable: restricted_ar_variance(var_input[variable], lag_order=lag_order)
-        for variable in VAR_COLUMNS
-    }
-
     for causing, caused in itertools.permutations(VAR_COLUMNS, 2):
-        full_variance = float(sigma_u.loc[caused, caused])
-        restricted_variance = restricted_variances[caused]
-        directional_measure = float(np.log(restricted_variance / full_variance))
-        directional_stat = n_obs * directional_measure
-        directional_pvalue = 1.0 - stats.chi2.cdf(directional_stat, df=lag_order)
+        directional_result = geweke_directional_measure(sample_data, causing, caused, lag_order=lag_order)
         rows.append({
             "sample": sample_name,
             "measure": "directional",
             "causing": causing,
             "caused": caused,
-            "geweke_value": directional_measure,
-            "test_stat": directional_stat,
-            "pvalue": directional_pvalue,
+            **directional_result,
         })
 
     for left, right in itertools.combinations(VAR_COLUMNS, 2):

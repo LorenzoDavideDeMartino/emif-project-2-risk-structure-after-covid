@@ -5,6 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scipy import optimize
 from arch import arch_model
+from statsmodels.tools.numdiff import approx_hess
 
 from project2_config import TABLE_DIR, COVID_BREAK, POST_COVID_START
 from project2_data_utils import (
@@ -20,6 +21,10 @@ KEY_PAIRS = [
     ("sp500", "us_hy_bonds"),
     ("sp500", "oil"),
     ("gold", "ust10y_yield"),
+]
+DCC_PAIRS = [
+    ("sp500", "ust10y_yield"),
+    ("sp500", "us_hy_bonds"),
 ]
 PAIR_LABELS = {
     ("sp500", "ust10y_yield"): "S&P 500 vs US 10Y yield change",
@@ -128,7 +133,7 @@ def dcc_negative_loglik(params: np.ndarray, z: np.ndarray, qbar: np.ndarray) -> 
     return 0.5 * loss
 
 
-def fit_bivariate_dcc(pair_data: pd.DataFrame) -> dict:
+def fit_bivariate_dcc(pair_data: pd.DataFrame, pair_name: str) -> dict:
     if "date" in pair_data.columns:
         pair_data = pair_data.set_index("date")
     z = standardized_residual_matrix(pair_data)
@@ -137,11 +142,15 @@ def fit_bivariate_dcc(pair_data: pd.DataFrame) -> dict:
         dcc_negative_loglik,
         x0=np.array([0.03, 0.94]),
         args=(z.to_numpy(), qbar),
-        method="Nelder-Mead",
-        options={"maxiter": 2000, "xatol": 1e-6, "fatol": 1e-6},
+        method="L-BFGS-B",
+        bounds=[(1e-6, 0.5), (1e-6, 0.998)],
     )
 
     alpha, beta = optimum.x
+    hessian = approx_hess(optimum.x, lambda p: dcc_negative_loglik(p, z.to_numpy(), qbar))
+    covariance = np.linalg.pinv(hessian)
+    standard_errors = np.sqrt(np.maximum(np.diag(covariance), 0.0))
+    t_statistics = optimum.x / np.where(standard_errors == 0.0, np.nan, standard_errors)
     q_t = qbar.copy()
     dates = z.index
     correlations = []
@@ -157,23 +166,32 @@ def fit_bivariate_dcc(pair_data: pd.DataFrame) -> dict:
 
     dcc_path = pd.DataFrame(correlations)
     return {
+        "pair": pair_name,
         "alpha": float(alpha),
         "beta": float(beta),
         "persistence": float(alpha + beta),
+        "alpha_se": float(standard_errors[0]),
+        "beta_se": float(standard_errors[1]),
+        "alpha_tstat": float(t_statistics[0]),
+        "beta_tstat": float(t_statistics[1]),
         "success": bool(optimum.success),
         "dcc_path": dcc_path,
     }
 
 
-def plot_spx_ust_dcc(dcc_path: pd.DataFrame) -> plt.Figure:
+def plot_dcc_path(dcc_path: pd.DataFrame, title: str) -> plt.Figure:
     figure, axis = plt.subplots(figsize=(13, 5))
     axis.plot(dcc_path["date"], dcc_path["dcc_corr"], color="darkgreen", lw=1.3)
     axis.axvline(pd.Timestamp(COVID_BREAK), color="red", linestyle="--", lw=1.1)
     axis.axhline(0.0, color="black", linestyle=":", lw=0.9)
-    axis.set_title("Figure 2. DCC-GARCH correlation: S&P 500 vs US 10Y yield change")
+    axis.set_title(title)
     axis.grid(alpha=0.2)
     figure.tight_layout()
     return figure
+
+
+def plot_spx_ust_dcc(dcc_path: pd.DataFrame) -> plt.Figure:
+    return plot_dcc_path(dcc_path, "Figure 2. DCC-GARCH correlation: S&P 500 vs US 10Y yield change")
 
 
 def summarize_dcc_path(dcc_path: pd.DataFrame) -> pd.DataFrame:
@@ -203,21 +221,31 @@ def forbes_rigobon_adjustment(correlation: float, variance_ratio: float) -> floa
 def build_forbes_rigobon_table(pre_covid: pd.DataFrame, post_covid: pd.DataFrame) -> pd.DataFrame:
     raw_pre_corr = pre_covid[["sp500", "ust10y_yield"]].corr().iloc[0, 1]
     raw_post_corr = post_covid[["sp500", "ust10y_yield"]].corr().iloc[0, 1]
-    variance_ratio = post_covid["sp500"].var() / pre_covid["sp500"].var()
-    adjusted_post_corr = forbes_rigobon_adjustment(raw_post_corr, variance_ratio)
+    sp500_variance_ratio = post_covid["sp500"].var() / pre_covid["sp500"].var()
+    ust10y_variance_ratio = post_covid["ust10y_yield"].var() / pre_covid["ust10y_yield"].var()
+    adjusted_post_corr = forbes_rigobon_adjustment(raw_post_corr, sp500_variance_ratio)
 
     return pd.DataFrame([{
         "raw_pre_corr": raw_pre_corr,
         "raw_post_corr": raw_post_corr,
-        "sp500_variance_ratio_post_pre": variance_ratio,
+        "sp500_variance_ratio_post_pre": sp500_variance_ratio,
+        "ust10y_variance_ratio_post_pre": ust10y_variance_ratio,
         "forbes_rigobon_adjusted_post_corr": adjusted_post_corr,
         "difference_adjusted_post_minus_pre": adjusted_post_corr - raw_pre_corr,
     }])
 
 
-def save_multivariate_outputs(rolling_summary: pd.DataFrame, dcc_summary: pd.DataFrame, fr_table: pd.DataFrame, dcc_path: pd.DataFrame) -> None:
+def save_multivariate_outputs(
+    rolling_summary: pd.DataFrame,
+    dcc_parameter_summary: pd.DataFrame,
+    dcc_path_summary: pd.DataFrame,
+    fr_table: pd.DataFrame,
+    dcc_paths: dict[str, pd.DataFrame],
+) -> None:
     ensure_output_dirs()
     rolling_summary.to_csv(TABLE_DIR / "03_rolling_correlation_summary.csv", index=False)
-    dcc_summary.to_csv(TABLE_DIR / "03_dcc_summary.csv", index=False)
+    dcc_parameter_summary.to_csv(TABLE_DIR / "03_dcc_parameter_summary.csv", index=False)
+    dcc_path_summary.to_csv(TABLE_DIR / "03_dcc_path_summary.csv", index=False)
     fr_table.to_csv(TABLE_DIR / "03_forbes_rigobon_summary.csv", index=False)
-    dcc_path.to_csv(TABLE_DIR / "03_spx_ust_dcc_path.csv", index=False)
+    for path_name, dcc_path in dcc_paths.items():
+        dcc_path.to_csv(TABLE_DIR / f"03_{path_name}_dcc_path.csv", index=False)

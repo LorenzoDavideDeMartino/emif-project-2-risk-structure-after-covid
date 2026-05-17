@@ -79,7 +79,7 @@ def engle_ng_test(result: object) -> dict:
     regression = OLS(
         test_frame["squared_resid"],
         add_constant(test_frame[["negative_dummy", "negative_size", "positive_size"]]),
-    ).fit()
+    ).fit(cov_type="HAC", cov_kwds={"maxlags": 5})
     joint_test = regression.f_test("negative_dummy = negative_size = positive_size = 0")
 
     return {

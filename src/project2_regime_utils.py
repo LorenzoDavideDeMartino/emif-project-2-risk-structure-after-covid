@@ -38,8 +38,9 @@ def load_regime_data() -> tuple[pd.DataFrame, pd.DataFrame]:
 def fit_two_state_markov(correlation_data: pd.DataFrame):
     # A two-state Markov model is a direct way to ask whether the equity/rate relation alternates between distinct dependence regimes.
     series = correlation_data.set_index("date")["spx_ust_rolling_corr"]
+    np.random.seed(42)
     model = MarkovRegression(series, k_regimes=2, trend="c", switching_variance=True)
-    result = model.fit(disp=False, em_iter=10, search_reps=20, search_iter=10)
+    result = model.fit(disp=False, em_iter=5, search_reps=5, search_iter=5, maxiter=200)
     return result
 
 
